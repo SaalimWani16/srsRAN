@@ -142,6 +142,7 @@ typedef struct {
   srsran::CIPHERING_ALGORITHM_ID_ENUM cipher_algo;
   srsran::INTEGRITY_ALGORITHM_ID_ENUM integ_algo;
   bool                                request_imeisv;
+  uint16_t                            options;
 } nas_init_t;
 
 typedef struct {

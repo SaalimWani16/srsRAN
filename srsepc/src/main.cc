@@ -97,6 +97,7 @@ void parse_args(all_args_t* args, int argc, char* argv[])
   string   hss_db_file;
   string   hss_auth_algo;
   string   log_filename;
+  uint16_t                            options;
 
   // Command line only options
   bpo::options_description general("General options");
@@ -107,6 +108,7 @@ void parse_args(all_args_t* args, int argc, char* argv[])
       ;
 
   // Command line or config file options
+  // @ saalim : answer printed when srsepc --help is written
   bpo::options_description common("Configuration options");
   common.add_options()
     ("mme.mme_code",        bpo::value<string>(&mme_code)->default_value("0x01"),            "MME Code")
@@ -123,6 +125,7 @@ void parse_args(all_args_t* args, int argc, char* argv[])
     ("mme.encryption_algo", bpo::value<string>(&encryption_algo)->default_value("EEA0"),     "Set preferred encryption algorithm for NAS layer ")
     ("mme.integrity_algo",  bpo::value<string>(&integrity_algo)->default_value("EIA1"),      "Set preferred integrity protection algorithm for NAS")
     ("mme.paging_timer",    bpo::value<uint16_t>(&paging_timer)->default_value(2),           "Set paging timer value in seconds (T3413)")
+    ("mme.options",         bpo::value<s>(&tau_reject_cause)->default_value(1),    "Options , 1-> Normal , 2-> Down,3->Numb, 4-> IMSI")
     ("mme.request_imeisv",  bpo::value<bool>(&request_imeisv)->default_value(false),         "Enable IMEISV request in Security mode command")
     ("hss.db_file",         bpo::value<string>(&hss_db_file)->default_value("ue_db.csv"),    ".csv file that stores UE's keys")
     ("spgw.gtpu_bind_addr", bpo::value<string>(&spgw_bind_addr)->default_value("127.0.0.1"), "IP address of SP-GW for the S1-U connection")
@@ -283,6 +286,7 @@ void parse_args(all_args_t* args, int argc, char* argv[])
   args->mme_args.s1ap_args.short_net_name = short_net_name;
   args->mme_args.s1ap_args.mme_apn        = mme_apn;
   args->mme_args.s1ap_args.paging_timer   = paging_timer;
+  args->mme_args.s1ap_args.options         = options;  // @ saalim
   args->mme_args.s1ap_args.request_imeisv = request_imeisv;
   args->spgw_args.gtpu_bind_addr          = spgw_bind_addr;
   args->spgw_args.sgi_if_addr             = sgi_if_addr;
@@ -394,7 +398,10 @@ int main(int argc, char* argv[])
   srsran_debug_handle_crash(argc, argv);
 
   all_args_t args = {};
-  parse_args(&args, argc, argv);
+  parse_args(&args, argc, argv); 
+  /* @ saalim argv contains different arguments, we need to pass another argument to it to trigger differnt attacks 
+
+  */ 
 
   // Setup logging.
   log_sink = (args.log_args.filename == "stdout") ? srslog::create_stdout_sink()
