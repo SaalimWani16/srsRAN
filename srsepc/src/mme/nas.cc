@@ -184,6 +184,124 @@ bool nas::handle_attach_request_IMSI_C(uint32_t                enb_ue_s1ap_id,
  * Handle UE Initiating Messages
  *
  ********************************/
+
+bool nas:: handle_attach_request_IMSI_C(uint32_t                enb_ue_s1ap_id,
+                                struct sctp_sndrcvinfo* enb_sri,
+                                srsran::byte_buffer_t*  nas_rx,
+                                const nas_init_t&       args,
+                                const nas_if_t&         itf)
+{
+  uint32_t                                       m_tmsi      = 0;
+  uint64_t                                       imsi        = 0;
+  LIBLTE_MME_ATTACH_REQUEST_MSG_STRUCT           attach_req  = {};
+  LIBLTE_MME_PDN_CONNECTIVITY_REQUEST_MSG_STRUCT pdn_con_req = {};
+  auto&                                          nas_logger  = srslog::fetch_basic_logger("NAS");
+
+  // Interfaces
+  s1ap_interface_nas* s1ap = itf.s1ap;
+  hss_interface_nas*  hss  = itf.hss;
+  gtpc_interface_nas* gtpc = itf.gtpc;
+
+  // Get NAS Attach Request and PDN connectivity request messages
+  LIBLTE_ERROR_ENUM err = liblte_mme_unpack_attach_request_msg((LIBLTE_BYTE_MSG_STRUCT*)nas_rx, &attach_req); // is required @ saalim
+  if (err != LIBLTE_SUCCESS) {
+    nas_logger.error("Error unpacking NAS attach request. Error: %s", liblte_error_text[err]);
+    return false;
+  }
+  // Get PDN Connectivity Request*/
+  err = liblte_mme_unpack_pdn_connectivity_request_msg(&attach_req.esm_msg, &pdn_con_req); //is required @ saalim
+  if (err != LIBLTE_SUCCESS) {
+    nas_logger.error("Error unpacking NAS PDN Connectivity Request. Error: %s", liblte_error_text[err]);
+    return false;
+  }
+
+  // Get UE IMSI
+
+
+  // Log Attach Request Information
+
+  // Get NAS Context if UE is known
+  nas* nas_ctx = NULL;// @ saalim
+  if (nas_ctx == NULL) {
+    // Get attach type from attach request
+    { // @ saalim function to send ID request
+      nas::handle_guti_attach_request_unknown_ue(enb_ue_s1ap_id, enb_sri, attach_req, pdn_con_req, args, itf);
+    } 
+  } 
+  return true;
+
+
+
+// ********                   ***************************************** below is guti function @saalim/
+  //nas*                         nas_ctx;
+  srsran::unique_byte_buffer_t nas_tx;
+
+  // Interfaces
+  /*s1ap_interface_nas* s1ap = itf.s1ap;
+  hss_interface_nas*  hss  = itf.hss;
+  gtpc_interface_nas* gtpc = itf.gtpc;
+*/
+  // Create new NAS context.
+  nas_ctx = new nas(args, itf);
+
+  // Could not find IMSI from M-TMSI, send Id request
+  // The IMSI will be set when the identity response is received
+  // Set EMM ctx
+  nas_ctx->m_emm_ctx.imsi  = 0;
+  nas_ctx->m_emm_ctx.state = EMM_STATE_DEREGISTERED;
+
+  // Save UE network capabilities
+ 
+  // Initialize NAS count
+  nas_ctx->m_sec_ctx.ul_nas_count             = 0;
+  nas_ctx->m_sec_ctx.dl_nas_count             = 0;
+  nas_ctx->m_emm_ctx.procedure_transaction_id = pdn_con_req.proc_transaction_id;
+
+  // Set ECM context  //@ saalim required
+  nas_ctx->m_ecm_ctx.enb_ue_s1ap_id = enb_ue_s1ap_id; // @ Saalim First Parameter 
+  nas_ctx->m_ecm_ctx.mme_ue_s1ap_id = s1ap->get_next_mme_ue_s1ap_id(); // @saalim Second Parameter for downlink message
+
+  uint8_t eps_bearer_id = pdn_con_req.eps_bearer_id;
+
+  // Save attach request type
+  //nas_ctx->m_emm_ctx.attach_type = attach_req.eps_attach_type;
+
+  // Save whether ESM information transfer is necessary
+   nas_ctx->m_ecm_ctx.eit = pdn_con_req.esm_info_transfer_flag_present;
+
+  // Add eNB info to UE ctxt
+  memcpy(&nas_ctx->m_ecm_ctx.enb_sri, enb_sri, sizeof(struct sctp_sndrcvinfo));  // @ saalim 3rd parameter
+
+  // Initialize E-RABs
+  for (uint i = 0; i < MAX_ERABS_PER_UE; i++) {
+    nas_ctx->m_esm_ctx[i].state   = ERAB_DEACTIVATED;
+    nas_ctx->m_esm_ctx[i].erab_id = i;
+  }
+
+  // Store temporary ue context
+  //s1ap->add_nas_ctx_to_mme_ue_s1ap_id_map(nas_ctx);
+  //s1ap->add_ue_to_enb_set(enb_sri->sinfo_assoc_id, nas_ctx->m_ecm_ctx.mme_ue_s1ap_id);
+
+  // Send Identity Request
+  nas_tx = srsran::make_byte_buffer();
+  if (nas_tx == nullptr) {
+    srslog::fetch_basic_logger("NAS").error("Couldn't allocate PDU in %s().", __FUNCTION__);
+    return false;
+  }
+  // Identity request *********************@ Saaalim**************************
+  nas_ctx->pack_identity_request(nas_tx.get());
+  s1ap->send_downlink_nas_transport(
+      nas_ctx->m_ecm_ctx.enb_ue_s1ap_id, nas_ctx->m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), nas_ctx->m_ecm_ctx.enb_sri);
+
+
+
+
+
+
+
+
+}
+
 bool nas::handle_attach_request(uint32_t                enb_ue_s1ap_id,
                                 struct sctp_sndrcvinfo* enb_sri,
                                 srsran::byte_buffer_t*  nas_rx,
@@ -931,7 +1049,7 @@ bool nas::handle_tracking_area_update_request(uint32_t                m_tmsi,
                                               srsran::byte_buffer_t*  nas_rx,
                                               const nas_init_t&       args,
                                               const nas_if_t&         itf)
-{
+{ bool err2 ;
   auto& nas_logger = srslog::fetch_basic_logger("NAS");
 
   nas_logger.info("Tracking Area Update Request -- S-TMSI 0x%x", m_tmsi);
@@ -959,7 +1077,26 @@ bool nas::handle_tracking_area_update_request(uint32_t                m_tmsi,
     nas_logger.error("Couldn't allocate PDU in %s().", __FUNCTION__);
     return false;
   }
-  nas_tmp.pack_tracking_area_update_reject(nas_tx.get(), LIBLTE_MME_EMM_CAUSE_IMPLICITLY_DETACHED);
+   if (args.options==1){
+      srsran::console("***********************Sending TAU reject messages NOW*************************12***");
+nas_tmp.pack_tracking_area_update_reject(nas_tx.get(),LIBLTE_MME_EMM_CAUSE_EPS_SERVICES_NOT_ALLOWED);
+  }
+  else if (args.options==2)
+  {  nas_tmp.pack_authentication_reject(nas_tx.get()); 
+  srsran::console("Sending Auth_Reject *****************via TAU UPDATE*****************************.\n");
+      
+  }
+  else if (args.options==3 )
+  { err2 = nas::handle_attach_request_IMSI_C(enb_ue_s1ap_id, enb_sri, nas_rx, args, itf);
+ srsran::console("Sending IMSI Request*****************via TAU UPDATE*****************************.\n");
+      
+  nas_tmp.pack_tracking_area_update_reject(nas_tx.get(),LIBLTE_MME_EMM_CAUSE_EPS_SERVICES_NOT_ALLOWED);
+    
+  }
+  else {
+nas_tmp.pack_tracking_area_update_reject(nas_tx.get(), LIBLTE_MME_EMM_CAUSE_IMPLICITLY_DETACHED);
+srsran::console(" Normal Mode  TAU UPDATE*****************************.\n");
+  }
   s1ap->send_downlink_nas_transport(enb_ue_s1ap_id, nas_tmp.m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), *enb_sri);
   return true;
 }

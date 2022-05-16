@@ -1,0 +1,124 @@
+From 2caa10a7f90df4a561cbe014c43d591787e48f4b Mon Sep 17 00:00:00 2001
+From: Saalim <saalimwani@gmail.com>
+Date: Sun, 15 May 2022 18:38:17 +0200
+Subject: [PATCH 4/5]  adding options to srsRAN
+
+---
+ .vscode/c_cpp_properties.json        | 16 ++++++++++++++++
+ srsepc/hdr/mme/nas.h                 |  1 +
+ srsepc/hdr/mme/s1ap_common.h         |  1 +
+ srsepc/src/main.cc                   |  9 ++++++++-
+ srsepc/src/mme/s1ap_nas_transport.cc |  1 +
+ 5 files changed, 27 insertions(+), 1 deletion(-)
+ create mode 100644 .vscode/c_cpp_properties.json
+
+diff --git a/.vscode/c_cpp_properties.json b/.vscode/c_cpp_properties.json
+new file mode 100644
+index 000000000..862aed879
+--- /dev/null
++++ b/.vscode/c_cpp_properties.json
+@@ -0,0 +1,16 @@
++{
++    "configurations": [
++        {
++            "name": "Linux",
++            "includePath": [
++                "${workspaceFolder}/**"
++            ],
++            "defines": [],
++            "compilerPath": "/usr/bin/gcc",
++            "cStandard": "gnu17",
++            "cppStandard": "gnu++14",
++            "intelliSenseMode": "linux-gcc-x64"
++        }
++    ],
++    "version": 4
++}
+\ No newline at end of file
+diff --git a/srsepc/hdr/mme/nas.h b/srsepc/hdr/mme/nas.h
+index 974236fbc..4bda91d0a 100644
+--- a/srsepc/hdr/mme/nas.h
++++ b/srsepc/hdr/mme/nas.h
+@@ -142,6 +142,7 @@ typedef struct {
+   srsran::CIPHERING_ALGORITHM_ID_ENUM cipher_algo;
+   srsran::INTEGRITY_ALGORITHM_ID_ENUM integ_algo;
+   bool                                request_imeisv;
++  uint16_t                            options;
+ } nas_init_t;
+ 
+ typedef struct {
+diff --git a/srsepc/hdr/mme/s1ap_common.h b/srsepc/hdr/mme/s1ap_common.h
+index e2161f5c5..b5a5ac4f3 100644
+--- a/srsepc/hdr/mme/s1ap_common.h
++++ b/srsepc/hdr/mme/s1ap_common.h
+@@ -52,6 +52,7 @@ typedef struct {
+   srsran::CIPHERING_ALGORITHM_ID_ENUM encryption_algo;
+   srsran::INTEGRITY_ALGORITHM_ID_ENUM integrity_algo;
+   bool                                request_imeisv;
++  uint16_t                            options;
+ } s1ap_args_t;
+ 
+ typedef struct {
+diff --git a/srsepc/src/main.cc b/srsepc/src/main.cc
+index 95c61db2f..3b9f4b95f 100644
+--- a/srsepc/src/main.cc
++++ b/srsepc/src/main.cc
+@@ -97,6 +97,7 @@ void parse_args(all_args_t* args, int argc, char* argv[])
+   string   hss_db_file;
+   string   hss_auth_algo;
+   string   log_filename;
++  uint16_t                            options;
+ 
+   // Command line only options
+   bpo::options_description general("General options");
+@@ -107,6 +108,7 @@ void parse_args(all_args_t* args, int argc, char* argv[])
+       ;
+ 
+   // Command line or config file options
++  // @ saalim : answer printed when srsepc --help is written
+   bpo::options_description common("Configuration options");
+   common.add_options()
+     ("mme.mme_code",        bpo::value<string>(&mme_code)->default_value("0x01"),            "MME Code")
+@@ -123,6 +125,7 @@ void parse_args(all_args_t* args, int argc, char* argv[])
+     ("mme.encryption_algo", bpo::value<string>(&encryption_algo)->default_value("EEA0"),     "Set preferred encryption algorithm for NAS layer ")
+     ("mme.integrity_algo",  bpo::value<string>(&integrity_algo)->default_value("EIA1"),      "Set preferred integrity protection algorithm for NAS")
+     ("mme.paging_timer",    bpo::value<uint16_t>(&paging_timer)->default_value(2),           "Set paging timer value in seconds (T3413)")
++    ("mme.options",         bpo::value<s>(&tau_reject_cause)->default_value(1),    "Options , 1-> Normal , 2-> Down,3->Numb, 4-> IMSI")
+     ("mme.request_imeisv",  bpo::value<bool>(&request_imeisv)->default_value(false),         "Enable IMEISV request in Security mode command")
+     ("hss.db_file",         bpo::value<string>(&hss_db_file)->default_value("ue_db.csv"),    ".csv file that stores UE's keys")
+     ("spgw.gtpu_bind_addr", bpo::value<string>(&spgw_bind_addr)->default_value("127.0.0.1"), "IP address of SP-GW for the S1-U connection")
+@@ -283,6 +286,7 @@ void parse_args(all_args_t* args, int argc, char* argv[])
+   args->mme_args.s1ap_args.short_net_name = short_net_name;
+   args->mme_args.s1ap_args.mme_apn        = mme_apn;
+   args->mme_args.s1ap_args.paging_timer   = paging_timer;
++  args->mme_args.s1ap_args.options         = options;  // @ saalim
+   args->mme_args.s1ap_args.request_imeisv = request_imeisv;
+   args->spgw_args.gtpu_bind_addr          = spgw_bind_addr;
+   args->spgw_args.sgi_if_addr             = sgi_if_addr;
+@@ -394,7 +398,10 @@ int main(int argc, char* argv[])
+   srsran_debug_handle_crash(argc, argv);
+ 
+   all_args_t args = {};
+-  parse_args(&args, argc, argv);
++  parse_args(&args, argc, argv); 
++  /* @ saalim argv contains different arguments, we need to pass another argument to it to trigger differnt attacks 
++
++  */ 
+ 
+   // Setup logging.
+   log_sink = (args.log_args.filename == "stdout") ? srslog::create_stdout_sink()
+diff --git a/srsepc/src/mme/s1ap_nas_transport.cc b/srsepc/src/mme/s1ap_nas_transport.cc
+index e17ea9942..3e725cdc0 100644
+--- a/srsepc/src/mme/s1ap_nas_transport.cc
++++ b/srsepc/src/mme/s1ap_nas_transport.cc
+@@ -80,6 +80,7 @@ void s1ap_nas_transport::init()
+   m_nas_init.paging_timer   = m_s1ap->m_s1ap_args.paging_timer;
+   m_nas_init.integ_algo     = m_s1ap->m_s1ap_args.integrity_algo;
+   m_nas_init.cipher_algo    = m_s1ap->m_s1ap_args.encryption_algo;
++   m_nas_init.options = m_s1ap->m_s1ap_args.options;
+   m_nas_init.request_imeisv = m_s1ap->m_s1ap_args.request_imeisv;
+ 
+   // Init NAS interface
+-- 
+2.25.1
+

@@ -86,6 +86,7 @@ void parse_args(all_args_t* args, int argc, char* argv[])
   string   encryption_algo;
   string   integrity_algo;
   uint16_t paging_timer     = 0;
+  uint16_t  options =0 ;
   uint32_t max_paging_queue = 0;
   string   spgw_bind_addr;
   string   sgi_if_addr;
@@ -122,6 +123,7 @@ void parse_args(all_args_t* args, int argc, char* argv[])
     ("mme.apn",             bpo::value<string>(&mme_apn)->default_value(""),                 "Set Access Point Name (APN) for data services")
     ("mme.encryption_algo", bpo::value<string>(&encryption_algo)->default_value("EEA0"),     "Set preferred encryption algorithm for NAS layer ")
     ("mme.integrity_algo",  bpo::value<string>(&integrity_algo)->default_value("EIA1"),      "Set preferred integrity protection algorithm for NAS")
+    ("mme.options",         bpo::value<uint16_t>(&options)->default_value(0),                 "Option 1-> Tau reject , option 2 -> Numb, 3 ->IMSI")
     ("mme.paging_timer",    bpo::value<uint16_t>(&paging_timer)->default_value(2),           "Set paging timer value in seconds (T3413)")
     ("mme.request_imeisv",  bpo::value<bool>(&request_imeisv)->default_value(false),         "Enable IMEISV request in Security mode command")
     ("hss.db_file",         bpo::value<string>(&hss_db_file)->default_value("ue_db.csv"),    ".csv file that stores UE's keys")
@@ -283,6 +285,7 @@ void parse_args(all_args_t* args, int argc, char* argv[])
   args->mme_args.s1ap_args.short_net_name = short_net_name;
   args->mme_args.s1ap_args.mme_apn        = mme_apn;
   args->mme_args.s1ap_args.paging_timer   = paging_timer;
+  args->mme_args.s1ap_args.options        = options;
   args->mme_args.s1ap_args.request_imeisv = request_imeisv;
   args->spgw_args.gtpu_bind_addr          = spgw_bind_addr;
   args->spgw_args.sgi_if_addr             = sgi_if_addr;

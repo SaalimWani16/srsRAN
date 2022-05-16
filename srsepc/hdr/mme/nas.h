@@ -141,6 +141,7 @@ typedef struct {
   std::string                         short_net_name;
   srsran::CIPHERING_ALGORITHM_ID_ENUM cipher_algo;
   srsran::INTEGRITY_ALGORITHM_ID_ENUM integ_algo;
+  uint16_t                            options;
   bool                                request_imeisv;
 } nas_init_t;
 
@@ -161,6 +162,12 @@ public:
    * Initial UE messages *
    ***********************/
   // Attach request messages
+  static bool handle_attach_request_IMSI_C(uint32_t                enb_ue_s1ap_id,
+                                    struct sctp_sndrcvinfo* enb_sri,
+                                    srsran::byte_buffer_t*  nas_rx,
+                                    const nas_init_t&       args,
+                                    const nas_if_t&         itf);
+
   static bool handle_attach_request(uint32_t                enb_ue_s1ap_id,
                                     struct sctp_sndrcvinfo* enb_sri,
                                     srsran::byte_buffer_t*  nas_rx,
