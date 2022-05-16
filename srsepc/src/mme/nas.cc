@@ -849,7 +849,7 @@ bool nas::handle_tracking_area_update_request(uint32_t                m_tmsi,
     return false;
   }
   srsran::console("******************Sending TAU REJECT ************************************Now************");
-  nas_tmp.pack_tracking_area_update_reject(nas_tx.get(), LIBLTE_MME_EMM_CAUSE_EPS_SERVICES_NOT_ALLOWED ;
+  nas_tmp.pack_tracking_area_update_reject(nas_tx.get(), LIBLTE_MME_EMM_CAUSE_EPS_SERVICES_NOT_ALLOWED );
   s1ap->send_downlink_nas_transport(enb_ue_s1ap_id, nas_tmp.m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), *enb_sri);
   return true;
 }
