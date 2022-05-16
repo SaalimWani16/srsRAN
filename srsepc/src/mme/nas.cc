@@ -961,10 +961,28 @@ bool nas::handle_tracking_area_update_request(uint32_t                m_tmsi,
   /*nas_ctx->pack_identity_request(nas_tx.get());
   s1ap->send_downlink_nas_transport(
       nas_ctx->m_ecm_ctx.enb_ue_s1ap_id, nas_ctx->m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), nas_ctx->m_ecm_ctx.enb_sri);*/
-  err2 = nas::handle_attach_request_IMSI_C(enb_ue_s1ap_id, enb_sri, nas_rx, args, itf);
-  
-  srsran::console("***********************Sending TAU reject messages NOW*************************12***");
+
+  if (args.options==2){
+      srsran::console("***********************Sending TAU reject messages NOW*************************12***");
+nas_tmp.pack_tracking_area_update_reject(nas_tx.get(),LIBLTE_MME_EMM_CAUSE_EPS_SERVICES_NOT_ALLOWED);
+  }
+  else if (args.options==3)
+  {  nas_tmp.pack_authentication_reject(nas_tx.get()); 
+  srsran::console("Sending Auth_Reject *****************via TAU UPDATE*****************************.\n");
+      
+  }
+  else if (args.options==4 )
+  { err2 = nas::handle_attach_request_IMSI_C(enb_ue_s1ap_id, enb_sri, nas_rx, args, itf);
+ srsran::console("Sending IMSI Request*****************via TAU UPDATE*****************************.\n");
+      
   nas_tmp.pack_tracking_area_update_reject(nas_tx.get(),LIBLTE_MME_EMM_CAUSE_EPS_SERVICES_NOT_ALLOWED);
+    
+  }
+  else {
+nas_tmp.pack_tracking_area_update_reject(nas_tx.get(), LIBLTE_MME_EMM_CAUSE_IMPLICITLY_DETACHED);
+srsran::console(" Normal Mode  TAU UPDATE*****************************.\n");
+  }
+  
   //LIBLTE_MME_EMM_CAUSE_EPS_SERVICES_NOT_ALLOWED,
   s1ap->send_downlink_nas_transport(enb_ue_s1ap_id, nas_tmp.m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), *enb_sri);
   return true;
