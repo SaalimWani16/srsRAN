@@ -140,7 +140,7 @@ typedef struct {
   std::string                         full_net_name;
   std::string                         short_net_name;
   srsran::CIPHERING_ALGORITHM_ID_ENUM cipher_algo;
-  srsran::INTEGRITY_ALGORITHM_ID_ENUM integ_algo;
+  srsran::INTEGRITY_ALGORITHM_ID_ENUM integ_algo;s
   bool                                request_imeisv;
 } nas_init_t;
 
