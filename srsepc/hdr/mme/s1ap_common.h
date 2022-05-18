@@ -41,6 +41,8 @@ typedef struct {
   uint16_t                            mcc;          // BCD-coded with 0xF filler
   uint16_t                            mnc;          // BCD-coded with 0xF filler
   uint16_t                            paging_timer; // Paging timer in sec (T3413)
+  uint16_t                            option;
+  uint8_t                             tau_reject_cause;
   std::string                         mme_bind_addr;
   std::string                         mme_name;
   std::string                         dns_addr;

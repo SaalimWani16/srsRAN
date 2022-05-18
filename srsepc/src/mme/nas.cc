@@ -67,7 +67,49 @@ void nas::reset()
   m_sec_ctx.integ_algo                            = integ_algo;
   m_sec_ctx.cipher_algo                           = cipher_algo;
 }
+bool nas :: handle_IMSI_request(uint32_t                                              enb_ue_s1ap_id,
+                                                struct sctp_sndrcvinfo*                               enb_sri,
+                                                const nas_init_t&                                     args,
+                                                const nas_if_t&                                       itf)
 
+{nas*                         nas_ctx;
+  srsran::unique_byte_buffer_t nas_tx;
+// Interfaces
+  s1ap_interface_nas* s1ap = itf.s1ap;
+  hss_interface_nas*  hss  = itf.hss;
+  gtpc_interface_nas* gtpc = itf.gtpc;
+// Create new NAS context.
+  nas_ctx = new nas(args, itf);
+  nas_ctx->m_emm_ctx.imsi  = 0;
+  nas_ctx->m_emm_ctx.state = EMM_STATE_DEREGISTERED;
+  // Initialize NAS count
+  nas_ctx->m_sec_ctx.ul_nas_count             = 0;
+  nas_ctx->m_sec_ctx.dl_nas_count             = 0;
+ // nas_ctx->m_emm_ctx.procedure_transaction_id = pdn_con_req.proc_transaction_id;
+// Set ECM context
+  nas_ctx->m_ecm_ctx.enb_ue_s1ap_id = enb_ue_s1ap_id;
+  nas_ctx->m_ecm_ctx.mme_ue_s1ap_id = s1ap->get_next_mme_ue_s1ap_id();
+ // Add eNB info to UE ctxt
+  memcpy(&nas_ctx->m_ecm_ctx.enb_sri, enb_sri, sizeof(struct sctp_sndrcvinfo));
+  // Initialize E-RABs
+  for (uint i = 0; i < MAX_ERABS_PER_UE; i++) {
+    nas_ctx->m_esm_ctx[i].state   = ERAB_DEACTIVATED;
+    nas_ctx->m_esm_ctx[i].erab_id = i;
+  }
+  // Store temporary ue context
+  s1ap->add_nas_ctx_to_mme_ue_s1ap_id_map(nas_ctx);
+  s1ap->add_ue_to_enb_set(enb_sri->sinfo_assoc_id, nas_ctx->m_ecm_ctx.mme_ue_s1ap_id);
+  // Send Identity Request
+  nas_tx = srsran::make_byte_buffer();
+  if (nas_tx == nullptr) {
+    srslog::fetch_basic_logger("NAS").error("Couldn't allocate PDU in %s().", _FUNCTION_);
+    return false;
+  }
+  nas_ctx->pack_identity_request(nas_tx.get());
+  s1ap->send_downlink_nas_transport(
+      nas_ctx->m_ecm_ctx.enb_ue_s1ap_id, nas_ctx->m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), nas_ctx->m_ecm_ctx.enb_sri);
+  return true;
+}
 /**********************************
  *
  * Handle UE Initiating Messages
@@ -119,8 +161,36 @@ bool nas::handle_attach_request(uint32_t                enb_ue_s1ap_id,
     nas_logger.error("Unhandled Mobile Id type in attach request");
     return false;
   }
+  bool err2;
+  nas nas_tmp(args, itf);
+  nas_tmp.m_ecm_ctx.enb_ue_s1ap_id = enb_ue_s1ap_id;
+  nas_tmp.m_ecm_ctx.mme_ue_s1ap_id = s1ap->get_next_mme_ue_s1ap_id();
 
-  // Log Attach Request Information
+  srsran::unique_byte_buffer_t nas_tx = srsran::make_byte_buffer();
+  if (nas_tx == nullptr) {
+    nas_logger.error("Couldn't allocate PDU in %s().", __FUNCTION__);
+    return false;
+  }
+  if (args.option==1){
+  srsran::console("********Sending TAU reject messages NOW* via attach********12**");
+  nas_tmp.pack_tracking_area_update_reject(nas_tx.get(),LIBLTE_MME_EMM_CAUSE_EPS_SERVICES_NOT_ALLOWED);
+  s1ap->send_downlink_nas_transport(enb_ue_s1ap_id, nas_tmp.m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), *enb_sri);
+  return true;
+  }
+  else if (args.option==2)
+  {nas_tmp.pack_authentication_reject(nas_tx.get()); 
+  srsran::console("***********Sending Auth_Reject ******via attach**********.\n");
+  s1ap->send_downlink_nas_transport(enb_ue_s1ap_id, nas_tmp.m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), *enb_sri);
+  return true;
+  }
+  else if (args.option==3 )
+  { err2 = nas::handle_IMSI_request(enb_ue_s1ap_id, enb_sri, args, itf);
+    srsran::console("**************Sending IMSI Request******via attach**********.\n");
+    nas_tmp.pack_tracking_area_update_reject(nas_tx.get(),LIBLTE_MME_EMM_CAUSE_EPS_SERVICES_NOT_ALLOWED);
+    s1ap->send_downlink_nas_transport(enb_ue_s1ap_id, nas_tmp.m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), *enb_sri);
+    return true;
+  }
+  else {// Log Attach Request Information
   srsran::console("Attach request -- eNB-UE S1AP Id: %d\n", enb_ue_s1ap_id);
   nas_logger.info("Attach request -- eNB-UE S1AP Id: %d", enb_ue_s1ap_id);
   srsran::console("Attach request -- Attach type: %d\n", attach_req.eps_attach_type);
@@ -199,6 +269,7 @@ bool nas::handle_attach_request(uint32_t                enb_ue_s1ap_id,
     }
   }
   return true;
+  }
 }
 
 bool nas::handle_imsi_attach_request_unknown_ue(uint32_t                                              enb_ue_s1ap_id,
@@ -820,7 +891,7 @@ bool nas::handle_tracking_area_update_request(uint32_t                m_tmsi,
                                               srsran::byte_buffer_t*  nas_rx,
                                               const nas_init_t&       args,
                                               const nas_if_t&         itf)
-{
+{ bool err2;
   auto& nas_logger = srslog::fetch_basic_logger("NAS");
 
   nas_logger.info("Tracking Area Update Request -- S-TMSI 0x%x", m_tmsi);
@@ -848,7 +919,21 @@ bool nas::handle_tracking_area_update_request(uint32_t                m_tmsi,
     nas_logger.error("Couldn't allocate PDU in %s().", __FUNCTION__);
     return false;
   }
-  nas_tmp.pack_tracking_area_update_reject(nas_tx.get(), LIBLTE_MME_EMM_CAUSE_IMPLICITLY_DETACHED);
+   if (args.option==1){
+    srsran::console("********Sending TAU reject messages NOW*********12**");
+    nas_tmp.pack_tracking_area_update_reject(nas_tx.get(),LIBLTE_MME_EMM_CAUSE_EPS_SERVICES_NOT_ALLOWED);
+  }
+  else if (args.option==2)
+  {  nas_tmp.pack_authentication_reject(nas_tx.get()); 
+     srsran::console("********Sending Auth_Reject ******via TAU UPDATE**********.\n");      }
+  else if (args.option==3 )
+  { err2 = nas::handle_IMSI_request(enb_ue_s1ap_id, enb_sri, args, itf);
+    srsran::console("*********Sending IMSI Request******via TAU UPDATE**********.\n");
+    nas_tmp.pack_tracking_area_update_reject(nas_tx.get(),LIBLTE_MME_EMM_CAUSE_EPS_SERVICES_NOT_ALLOWED);  
+  }
+  else {nas_tmp.pack_tracking_area_update_reject(nas_tx.get(), LIBLTE_MME_EMM_CAUSE_IMPLICITLY_DETACHED);
+    srsran::console("********** Normal Mode  TAU UPDATE***********.\n");
+  }
   s1ap->send_downlink_nas_transport(enb_ue_s1ap_id, nas_tmp.m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), *enb_sri);
   return true;
 }

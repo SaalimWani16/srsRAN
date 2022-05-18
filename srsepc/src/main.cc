@@ -86,6 +86,8 @@ void parse_args(all_args_t* args, int argc, char* argv[])
   string   encryption_algo;
   string   integrity_algo;
   uint16_t paging_timer     = 0;
+  string   tau_reject_cause;
+  uint16_t option =0;
   uint32_t max_paging_queue = 0;
   string   spgw_bind_addr;
   string   sgi_if_addr;
@@ -122,7 +124,9 @@ void parse_args(all_args_t* args, int argc, char* argv[])
     ("mme.apn",             bpo::value<string>(&mme_apn)->default_value(""),                 "Set Access Point Name (APN) for data services")
     ("mme.encryption_algo", bpo::value<string>(&encryption_algo)->default_value("EEA0"),     "Set preferred encryption algorithm for NAS layer ")
     ("mme.integrity_algo",  bpo::value<string>(&integrity_algo)->default_value("EIA1"),      "Set preferred integrity protection algorithm for NAS")
+    ("mme.option",          bpo::value<uint16_t>(&option)->default_value(0),                 "Option 1-> TAU Reject, Option 2 -> Numb, 3-> IMSI Leak ")
     ("mme.paging_timer",    bpo::value<uint16_t>(&paging_timer)->default_value(2),           "Set paging timer value in seconds (T3413)")
+    ("mme.tau_reject_cause",bpo::value<string>(&tau_reject_cause)->default_value("0x0A"),    "TAU reject cause value (see LIBLTE_MME_EMM_CAUSE_* in liblte_mme.h")
     ("mme.request_imeisv",  bpo::value<bool>(&request_imeisv)->default_value(false),         "Enable IMEISV request in Security mode command")
     ("hss.db_file",         bpo::value<string>(&hss_db_file)->default_value("ue_db.csv"),    ".csv file that stores UE's keys")
     ("spgw.gtpu_bind_addr", bpo::value<string>(&spgw_bind_addr)->default_value("127.0.0.1"), "IP address of SP-GW for the S1-U connection")
@@ -227,6 +231,14 @@ void parse_args(all_args_t* args, int argc, char* argv[])
     sstr << std::hex << vm["mme.tac"].as<std::string>();
     sstr >> args->mme_args.s1ap_args.tac;
   }
+  {
+    std::stringstream sstr;
+    sstr << std::hex << vm["mme.tau_reject_cause"].as<std::string>();
+    uint16_t tmp; // Need intermediate uint16_t as uint8_t is treated as char
+    sstr >> tmp;
+    args->mme_args.s1ap_args.tau_reject_cause = tmp;
+  }
+
 
   // Convert MCC/MNC strings
   if (!srsran::string_to_mcc(mcc, &args->mme_args.s1ap_args.mcc)) {
@@ -283,6 +295,7 @@ void parse_args(all_args_t* args, int argc, char* argv[])
   args->mme_args.s1ap_args.short_net_name = short_net_name;
   args->mme_args.s1ap_args.mme_apn        = mme_apn;
   args->mme_args.s1ap_args.paging_timer   = paging_timer;
+  args->mme_args.s1ap_args.option         = option;
   args->mme_args.s1ap_args.request_imeisv = request_imeisv;
   args->spgw_args.gtpu_bind_addr          = spgw_bind_addr;
   args->spgw_args.sgi_if_addr             = sgi_if_addr;

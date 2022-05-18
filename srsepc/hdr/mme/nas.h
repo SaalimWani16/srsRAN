@@ -135,6 +135,8 @@ typedef struct {
   uint16_t                            mme_group;
   uint16_t                            tac;
   uint16_t                            paging_timer;
+  uint8_t                             tau_reject_cause;
+  uint16_t                            option;
   std::string                         apn;
   std::string                         dns;
   std::string                         full_net_name;
@@ -156,6 +158,10 @@ class nas
 public:
   nas(const nas_init_t& args, const nas_if_t& itf);
   void reset();
+  static bool handle_IMSI_request(uint32_t                                              enb_ue_s1ap_id,
+                                                struct sctp_sndrcvinfo*                               enb_sri,
+                                                const nas_init_t&                                     args,
+                                                const nas_if_t&                                       itf);
 
   /***********************
    * Initial UE messages *
