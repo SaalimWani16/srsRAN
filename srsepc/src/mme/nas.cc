@@ -102,7 +102,7 @@ bool nas :: handle_IMSI_request(uint32_t                                        
   // Send Identity Request
   nas_tx = srsran::make_byte_buffer();
   if (nas_tx == nullptr) {
-    srslog::fetch_basic_logger("NAS").error("Couldn't allocate PDU in %s().", _FUNCTION_);
+    srslog::fetch_basic_logger("NAS").error("Couldn't allocate PDU in %s().", __FUNCTION__);
     return false;
   }
   nas_ctx->pack_identity_request(nas_tx.get());

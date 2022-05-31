@@ -1,0 +1,244 @@
+From e5f54adedf2198013a0829cf67410b7fa8f6d210 Mon Sep 17 00:00:00 2001
+From: Saalim <saalimwani@gmail.com>
+Date: Wed, 18 May 2022 21:59:44 +0200
+Subject: [PATCH]  modified_files_option2
+
+---
+ srsepc/hdr/mme/nas.h                 |  6 ++
+ srsepc/hdr/mme/s1ap_common.h         |  2 +
+ srsepc/src/main.cc                   | 13 ++++
+ srsepc/src/mme/nas.cc                | 91 +++++++++++++++++++++++++++-
+ srsepc/src/mme/s1ap_nas_transport.cc |  2 +
+ 5 files changed, 111 insertions(+), 3 deletions(-)
+
+diff --git a/srsepc/hdr/mme/nas.h b/srsepc/hdr/mme/nas.h
+index e7624a28c..97b8b051f 100644
+--- a/srsepc/hdr/mme/nas.h
++++ b/srsepc/hdr/mme/nas.h
+@@ -135,6 +135,8 @@ typedef struct {
+   uint16_t                            mme_group;
+   uint16_t                            tac;
+   uint16_t                            paging_timer;
++  uint8_t                             tau_reject_cause;
++  uint16_t                            option;
+   std::string                         apn;
+   std::string                         dns;
+   std::string                         full_net_name;
+@@ -156,6 +158,10 @@ class nas
+ public:
+   nas(const nas_init_t& args, const nas_if_t& itf);
+   void reset();
++  static bool handle_IMSI_request(uint32_t                                              enb_ue_s1ap_id,
++                                                struct sctp_sndrcvinfo*                               enb_sri,
++                                                const nas_init_t&                                     args,
++                                                const nas_if_t&                                       itf);
+ 
+   /***********************
+    * Initial UE messages *
+diff --git a/srsepc/hdr/mme/s1ap_common.h b/srsepc/hdr/mme/s1ap_common.h
+index 0b1a06779..db3f05c17 100644
+--- a/srsepc/hdr/mme/s1ap_common.h
++++ b/srsepc/hdr/mme/s1ap_common.h
+@@ -41,6 +41,8 @@ typedef struct {
+   uint16_t                            mcc;          // BCD-coded with 0xF filler
+   uint16_t                            mnc;          // BCD-coded with 0xF filler
+   uint16_t                            paging_timer; // Paging timer in sec (T3413)
++  uint16_t                            option;
++  uint8_t                             tau_reject_cause;
+   std::string                         mme_bind_addr;
+   std::string                         mme_name;
+   std::string                         dns_addr;
+diff --git a/srsepc/src/main.cc b/srsepc/src/main.cc
+index f9e9f3de4..9a4f1e526 100644
+--- a/srsepc/src/main.cc
++++ b/srsepc/src/main.cc
+@@ -86,6 +86,8 @@ void parse_args(all_args_t* args, int argc, char* argv[])
+   string   encryption_algo;
+   string   integrity_algo;
+   uint16_t paging_timer     = 0;
++  string   tau_reject_cause;
++  uint16_t option =0;
+   uint32_t max_paging_queue = 0;
+   string   spgw_bind_addr;
+   string   sgi_if_addr;
+@@ -122,7 +124,9 @@ void parse_args(all_args_t* args, int argc, char* argv[])
+     ("mme.apn",             bpo::value<string>(&mme_apn)->default_value(""),                 "Set Access Point Name (APN) for data services")
+     ("mme.encryption_algo", bpo::value<string>(&encryption_algo)->default_value("EEA0"),     "Set preferred encryption algorithm for NAS layer ")
+     ("mme.integrity_algo",  bpo::value<string>(&integrity_algo)->default_value("EIA1"),      "Set preferred integrity protection algorithm for NAS")
++    ("mme.option",          bpo::value<uint16_t>(&option)->default_value(0),                 "Option 1-> TAU Reject, Option 2 -> Numb, 3-> IMSI Leak ")
+     ("mme.paging_timer",    bpo::value<uint16_t>(&paging_timer)->default_value(2),           "Set paging timer value in seconds (T3413)")
++    ("mme.tau_reject_cause",bpo::value<string>(&tau_reject_cause)->default_value("0x0A"),    "TAU reject cause value (see LIBLTE_MME_EMM_CAUSE_* in liblte_mme.h")
+     ("mme.request_imeisv",  bpo::value<bool>(&request_imeisv)->default_value(false),         "Enable IMEISV request in Security mode command")
+     ("hss.db_file",         bpo::value<string>(&hss_db_file)->default_value("ue_db.csv"),    ".csv file that stores UE's keys")
+     ("spgw.gtpu_bind_addr", bpo::value<string>(&spgw_bind_addr)->default_value("127.0.0.1"), "IP address of SP-GW for the S1-U connection")
+@@ -227,6 +231,14 @@ void parse_args(all_args_t* args, int argc, char* argv[])
+     sstr << std::hex << vm["mme.tac"].as<std::string>();
+     sstr >> args->mme_args.s1ap_args.tac;
+   }
++  {
++    std::stringstream sstr;
++    sstr << std::hex << vm["mme.tau_reject_cause"].as<std::string>();
++    uint16_t tmp; // Need intermediate uint16_t as uint8_t is treated as char
++    sstr >> tmp;
++    args->mme_args.s1ap_args.tau_reject_cause = tmp;
++  }
++
+ 
+   // Convert MCC/MNC strings
+   if (!srsran::string_to_mcc(mcc, &args->mme_args.s1ap_args.mcc)) {
+@@ -283,6 +295,7 @@ void parse_args(all_args_t* args, int argc, char* argv[])
+   args->mme_args.s1ap_args.short_net_name = short_net_name;
+   args->mme_args.s1ap_args.mme_apn        = mme_apn;
+   args->mme_args.s1ap_args.paging_timer   = paging_timer;
++  args->mme_args.s1ap_args.option         = option;
+   args->mme_args.s1ap_args.request_imeisv = request_imeisv;
+   args->spgw_args.gtpu_bind_addr          = spgw_bind_addr;
+   args->spgw_args.sgi_if_addr             = sgi_if_addr;
+diff --git a/srsepc/src/mme/nas.cc b/srsepc/src/mme/nas.cc
+index 6dd69e0ef..af1041023 100644
+--- a/srsepc/src/mme/nas.cc
++++ b/srsepc/src/mme/nas.cc
+@@ -67,7 +67,49 @@ void nas::reset()
+   m_sec_ctx.integ_algo                            = integ_algo;
+   m_sec_ctx.cipher_algo                           = cipher_algo;
+ }
++bool nas :: handle_IMSI_request(uint32_t                                              enb_ue_s1ap_id,
++                                                struct sctp_sndrcvinfo*                               enb_sri,
++                                                const nas_init_t&                                     args,
++                                                const nas_if_t&                                       itf)
+ 
++{nas*                         nas_ctx;
++  srsran::unique_byte_buffer_t nas_tx;
++// Interfaces
++  s1ap_interface_nas* s1ap = itf.s1ap;
++  hss_interface_nas*  hss  = itf.hss;
++  gtpc_interface_nas* gtpc = itf.gtpc;
++// Create new NAS context.
++  nas_ctx = new nas(args, itf);
++  nas_ctx->m_emm_ctx.imsi  = 0;
++  nas_ctx->m_emm_ctx.state = EMM_STATE_DEREGISTERED;
++  // Initialize NAS count
++  nas_ctx->m_sec_ctx.ul_nas_count             = 0;
++  nas_ctx->m_sec_ctx.dl_nas_count             = 0;
++ // nas_ctx->m_emm_ctx.procedure_transaction_id = pdn_con_req.proc_transaction_id;
++// Set ECM context
++  nas_ctx->m_ecm_ctx.enb_ue_s1ap_id = enb_ue_s1ap_id;
++  nas_ctx->m_ecm_ctx.mme_ue_s1ap_id = s1ap->get_next_mme_ue_s1ap_id();
++ // Add eNB info to UE ctxt
++  memcpy(&nas_ctx->m_ecm_ctx.enb_sri, enb_sri, sizeof(struct sctp_sndrcvinfo));
++  // Initialize E-RABs
++  for (uint i = 0; i < MAX_ERABS_PER_UE; i++) {
++    nas_ctx->m_esm_ctx[i].state   = ERAB_DEACTIVATED;
++    nas_ctx->m_esm_ctx[i].erab_id = i;
++  }
++  // Store temporary ue context
++  s1ap->add_nas_ctx_to_mme_ue_s1ap_id_map(nas_ctx);
++  s1ap->add_ue_to_enb_set(enb_sri->sinfo_assoc_id, nas_ctx->m_ecm_ctx.mme_ue_s1ap_id);
++  // Send Identity Request
++  nas_tx = srsran::make_byte_buffer();
++  if (nas_tx == nullptr) {
++    srslog::fetch_basic_logger("NAS").error("Couldn't allocate PDU in %s().", __FUNCTION__);
++    return false;
++  }
++  nas_ctx->pack_identity_request(nas_tx.get());
++  s1ap->send_downlink_nas_transport(
++      nas_ctx->m_ecm_ctx.enb_ue_s1ap_id, nas_ctx->m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), nas_ctx->m_ecm_ctx.enb_sri);
++  return true;
++}
+ /**********************************
+  *
+  * Handle UE Initiating Messages
+@@ -119,8 +161,36 @@ bool nas::handle_attach_request(uint32_t                enb_ue_s1ap_id,
+     nas_logger.error("Unhandled Mobile Id type in attach request");
+     return false;
+   }
++  bool err2;
++  nas nas_tmp(args, itf);
++  nas_tmp.m_ecm_ctx.enb_ue_s1ap_id = enb_ue_s1ap_id;
++  nas_tmp.m_ecm_ctx.mme_ue_s1ap_id = s1ap->get_next_mme_ue_s1ap_id();
+ 
+-  // Log Attach Request Information
++  srsran::unique_byte_buffer_t nas_tx = srsran::make_byte_buffer();
++  if (nas_tx == nullptr) {
++    nas_logger.error("Couldn't allocate PDU in %s().", __FUNCTION__);
++    return false;
++  }
++  if (args.option==1){
++  srsran::console("********Sending TAU reject messages NOW* via attach********12**");
++  nas_tmp.pack_tracking_area_update_reject(nas_tx.get(),LIBLTE_MME_EMM_CAUSE_EPS_SERVICES_NOT_ALLOWED);
++  s1ap->send_downlink_nas_transport(enb_ue_s1ap_id, nas_tmp.m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), *enb_sri);
++  return true;
++  }
++  else if (args.option==2)
++  {nas_tmp.pack_authentication_reject(nas_tx.get()); 
++  srsran::console("***********Sending Auth_Reject ******via attach**********.\n");
++  s1ap->send_downlink_nas_transport(enb_ue_s1ap_id, nas_tmp.m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), *enb_sri);
++  return true;
++  }
++  else if (args.option==3 )
++  { err2 = nas::handle_IMSI_request(enb_ue_s1ap_id, enb_sri, args, itf);
++    srsran::console("**************Sending IMSI Request******via attach**********.\n");
++    nas_tmp.pack_tracking_area_update_reject(nas_tx.get(),LIBLTE_MME_EMM_CAUSE_EPS_SERVICES_NOT_ALLOWED);
++    s1ap->send_downlink_nas_transport(enb_ue_s1ap_id, nas_tmp.m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), *enb_sri);
++    return true;
++  }
++  else {// Log Attach Request Information
+   srsran::console("Attach request -- eNB-UE S1AP Id: %d\n", enb_ue_s1ap_id);
+   nas_logger.info("Attach request -- eNB-UE S1AP Id: %d", enb_ue_s1ap_id);
+   srsran::console("Attach request -- Attach type: %d\n", attach_req.eps_attach_type);
+@@ -199,6 +269,7 @@ bool nas::handle_attach_request(uint32_t                enb_ue_s1ap_id,
+     }
+   }
+   return true;
++  }
+ }
+ 
+ bool nas::handle_imsi_attach_request_unknown_ue(uint32_t                                              enb_ue_s1ap_id,
+@@ -820,7 +891,7 @@ bool nas::handle_tracking_area_update_request(uint32_t                m_tmsi,
+                                               srsran::byte_buffer_t*  nas_rx,
+                                               const nas_init_t&       args,
+                                               const nas_if_t&         itf)
+-{
++{ bool err2;
+   auto& nas_logger = srslog::fetch_basic_logger("NAS");
+ 
+   nas_logger.info("Tracking Area Update Request -- S-TMSI 0x%x", m_tmsi);
+@@ -848,7 +919,21 @@ bool nas::handle_tracking_area_update_request(uint32_t                m_tmsi,
+     nas_logger.error("Couldn't allocate PDU in %s().", __FUNCTION__);
+     return false;
+   }
+-  nas_tmp.pack_tracking_area_update_reject(nas_tx.get(), LIBLTE_MME_EMM_CAUSE_IMPLICITLY_DETACHED);
++   if (args.option==1){
++    srsran::console("********Sending TAU reject messages NOW*********12**");
++    nas_tmp.pack_tracking_area_update_reject(nas_tx.get(),LIBLTE_MME_EMM_CAUSE_EPS_SERVICES_NOT_ALLOWED);
++  }
++  else if (args.option==2)
++  {  nas_tmp.pack_authentication_reject(nas_tx.get()); 
++     srsran::console("********Sending Auth_Reject ******via TAU UPDATE**********.\n");      }
++  else if (args.option==3 )
++  { err2 = nas::handle_IMSI_request(enb_ue_s1ap_id, enb_sri, args, itf);
++    srsran::console("*********Sending IMSI Request******via TAU UPDATE**********.\n");
++    nas_tmp.pack_tracking_area_update_reject(nas_tx.get(),LIBLTE_MME_EMM_CAUSE_EPS_SERVICES_NOT_ALLOWED);  
++  }
++  else {nas_tmp.pack_tracking_area_update_reject(nas_tx.get(), LIBLTE_MME_EMM_CAUSE_IMPLICITLY_DETACHED);
++    srsran::console("********** Normal Mode  TAU UPDATE***********.\n");
++  }
+   s1ap->send_downlink_nas_transport(enb_ue_s1ap_id, nas_tmp.m_ecm_ctx.mme_ue_s1ap_id, nas_tx.get(), *enb_sri);
+   return true;
+ }
+diff --git a/srsepc/src/mme/s1ap_nas_transport.cc b/srsepc/src/mme/s1ap_nas_transport.cc
+index bcef0a70c..9a06f9863 100644
+--- a/srsepc/src/mme/s1ap_nas_transport.cc
++++ b/srsepc/src/mme/s1ap_nas_transport.cc
+@@ -78,6 +78,8 @@ void s1ap_nas_transport::init()
+   m_nas_init.full_net_name  = m_s1ap->m_s1ap_args.full_net_name;
+   m_nas_init.short_net_name = m_s1ap->m_s1ap_args.short_net_name;
+   m_nas_init.paging_timer   = m_s1ap->m_s1ap_args.paging_timer;
++  m_nas_init.tau_reject_cause = m_s1ap->m_s1ap_args.tau_reject_cause;
++  m_nas_init.option         = m_s1ap->m_s1ap_args.option;
+   m_nas_init.integ_algo     = m_s1ap->m_s1ap_args.integrity_algo;
+   m_nas_init.cipher_algo    = m_s1ap->m_s1ap_args.encryption_algo;
+   m_nas_init.request_imeisv = m_s1ap->m_s1ap_args.request_imeisv;
+-- 
+2.25.1
+
